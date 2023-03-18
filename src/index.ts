@@ -1,108 +1,52 @@
-import { exec } from "child_process";
 import Docker from "dockerode";
-import { dirname } from "path";
-import { promisify } from "util";
+import express from "express";
 import { parse } from "yaml";
+import {
+  BackupComponentConfig,
+  backupComponents,
+  BackupContext,
+  LayupConfig,
+} from "./components";
 
-const execAsync = promisify(exec);
-
-type DirectoryBackupComponent = {
-  type: "folder";
-  stop_container?: string;
-  from: string;
-  to: string;
-};
-
-type BackupComponent = DirectoryBackupComponent;
-
-type LayupConfig = BackupComponent[];
+const app = express();
+const port = 4809;
 
 process.env.LAYUP_CONFIG = `
-- type: folder
-  stop_container: minio
-  from: /var/data/minio
-  to: /var/backup/minio
+schedule: 5 4 * * *
+stop_first: minio
+components:
+  - type: directory
+    from: /var/data/minio
+    to: /var/backup/minio
 `;
 
-const main = async () => {
-  const docker = new Docker({ socketPath: "/var/run/docker.sock" });
+const docker = new Docker({ socketPath: "/var/run/docker.sock" });
+const yamlConfig = parse(process.env.LAYUP_CONFIG) as LayupConfig;
 
-  const config: LayupConfig = parse(process.env.LAYUP_CONFIG);
+app.get("/backup", async (req, res) => {
+  const context: BackupContext = {
+    docker,
+  };
 
-  for (const component of config) {
-    await backupComponent(docker, component);
+  for (const component of yamlConfig.components) {
+    await backupComponent(context, component);
   }
-};
 
-const backupComponent = async (docker: any, component: BackupComponent) => {
-  switch (component.type) {
-    case "folder":
-      backupFolder(docker, component);
-      break;
+  res.send("Hello World!");
+});
 
-    default:
-      break;
-  }
-};
+app.listen(port, async () => {
+  return console.log(`Listening on http://localhost:${port}`);
+});
 
-const backupFolder = async (
-  docker: any,
-  component: DirectoryBackupComponent
+const backupComponent = async (
+  context: BackupContext,
+  config: BackupComponentConfig
 ) => {
-  let container = undefined;
-  if (component.stop_container) {
-    container = await stopContainer(docker, component.stop_container);
-  }
-
-  console.log(`ryncing ${component.from} -> ${component.to}`);
-  await rsyncDirectory(component.from, component.to);
-
-  if (container) {
-    await container.start();
-  }
-};
-
-const rsyncDirectory = async (from: string, to: string) => {
-  // rsync will will copy any folders into the directory below the destination given, so we
-  // want to use the parent directory
-  const dest = dirname(to);
-
-  const result = await execAsync(`rsync -r --delete ${from} ${dest}`);
-  console.log(result);
-  return result;
-};
-
-const stopContainer = async (docker: any, containerNameIncludes: string) => {
-  const container = await getContainerByName(docker, containerNameIncludes);
-
-  if (container) {
-    console.log("Stopping container " + container.Id);
-    await container.stop();
+  const component = backupComponents.find((c) => c.name === config.type);
+  if (component) {
+    await component.backup(context, config);
   } else {
-    console.warn("Unable to find container " + containerNameIncludes);
+    console.warn("Unknown backup component: " + config.type);
   }
-
-  return container;
 };
-
-const getContainerByName = async (
-  docker: any,
-  containerNameIncludes: string
-): Promise<any | undefined> => {
-  const containers = await docker.listContainers();
-
-  const container = containers.find((c) =>
-    c.Names.some((n) => n.includes(containerNameIncludes))
-  );
-
-  if (container) {
-    console.log("Starting container " + container.Id);
-    return docker.getContainer(container.Id);
-  } else {
-    console.warn("Unable to find container " + containerNameIncludes);
-  }
-
-  return undefined;
-};
-
-setTimeout(main, 3000);
