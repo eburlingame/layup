@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:13-alpine
+    restart: on-failure
+    environment:
+      POSTGRES_DATABASE: "steno"
+      POSTGRES_USER: "steno"
+      POSTGRES_PASSWORD: "steno"
+    ports:
+      - 5432:5432
+
+  minio:
+    image: minio/minio
+    restart: on-failure
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./test/data/minio:/data
+    environment:
+      MINIO_ROOT_USER: test
+      MINIO_ROOT_PASSWORD: testtesttest
+    command: server --console-address ":9001" /data
+
+  backup:
+    build: .
+    environment:
+      LAYUP_CONFIG: |
+        - type: folder
+          stop_container: minio
+          from: /var/data/minio/
+          to: /var/backup/minio/
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./test/data/minio:/var/data/minio
+      - ./test/backup/minio:/var/backup/minio
