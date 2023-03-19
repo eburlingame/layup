@@ -13,7 +13,8 @@ const port = 4809;
 
 process.env.LAYUP_CONFIG = `
 schedule: 5 4 * * *
-stop_first: minio
+pre: 
+  - stop_container: minio
 components:
   - type: directory
     from: /var/data/minio

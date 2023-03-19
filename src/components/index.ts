@@ -11,9 +11,16 @@ export type BackupComponent<C> = {
   restore: (context: BackupContext, config: C) => Promise<void>;
 };
 
+export type PreOptions = {
+  stop_containers: string[];
+};
+
+export type PostOptions = {};
+
 export type LayupConfig = {
   schedule?: string;
-  stop_first?: string[];
+  pre?: PreOptions;
+  post?: PostOptions;
   components: BackupComponentConfig[];
 };
 
