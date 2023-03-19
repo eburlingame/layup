@@ -1,6 +1,6 @@
 import { dirname } from "path";
 import { BackupComponent, BackupContext } from ".";
-import { execAsync, stopContainer } from "../utils";
+import { execAsync } from "../utils";
 
 export type DirectoryBackupConfig = {
   type: "folder";
@@ -13,28 +13,23 @@ export const DirectoryBackupComponent: BackupComponent<DirectoryBackupConfig> =
   {
     name: "directory",
     backup: async (
-      { docker }: BackupContext,
+      context: BackupContext,
       config: DirectoryBackupConfig
-    ) => {
-      const { stop_container, from, to } = config;
-
-      let container = undefined;
-      if (stop_container) {
-        container = await stopContainer(docker, stop_container);
-      }
+    ): Promise<BackupContext> => {
+      const { from, to } = config;
 
       console.log(`ryncing ${from} -> ${to}`);
       await rsyncDirectory(from, to);
 
-      if (container) {
-        await container.start();
-      }
+      return context;
     },
 
     restore: async (
       context: BackupContext,
       config: DirectoryBackupConfig
-    ) => {},
+    ): Promise<BackupContext> => {
+      return context;
+    },
   };
 
 export const rsyncDirectory = async (from: string, to: string) => {

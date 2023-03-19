@@ -1,13 +1,14 @@
 import { exec } from "child_process";
 
 import { promisify } from "util";
+import { DockerContainer } from "./components";
 
 export const execAsync = promisify(exec);
 
 export const stopContainer = async (
   docker: any,
   containerNameIncludes: string
-) => {
+): Promise<DockerContainer | undefined> => {
   const container = await getContainerByName(docker, containerNameIncludes);
 
   if (container) {
@@ -23,7 +24,7 @@ export const stopContainer = async (
 export const getContainerByName = async (
   docker: any,
   containerNameIncludes: string
-): Promise<any | undefined> => {
+): Promise<DockerContainer | undefined> => {
   const containers = await docker.listContainers();
 
   const container = containers.find((c) =>
@@ -31,7 +32,6 @@ export const getContainerByName = async (
   );
 
   if (container) {
-    console.log("Starting container " + container.Id);
     return docker.getContainer(container.Id);
   } else {
     console.warn("Unable to find container " + containerNameIncludes);
